@@ -1,0 +1,5 @@
+# clasp local config — contains deployment-specific IDs, not for version control
+.clasp.json
+
+# Environment / secrets
+.env
