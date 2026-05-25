@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #333; padding: 14px 16px; }
+
+    .btn {
+      display: block; width: 100%; padding: 8px;
+      border: none; border-radius: 3px; font-size: 13px; cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: #fff; font-size: 14px; padding: 10px; }
+    .btn-primary:hover:not(:disabled) { background: #1557b0; }
+    .btn-secondary { background: #f1f3f4; color: #333; border: 1px solid #ccc; }
+    .btn-secondary:hover:not(:disabled) { background: #e8eaed; border-color: #bbb; }
+
+    .row { display: flex; gap: 6px; align-items: flex-end; margin-top: 10px; }
+    .row select { flex: 1; min-width: 0; }
+    .row .btn { width: auto; padding: 7px 14px; white-space: nowrap; }
+
+    label { display: block; font-size: 11px; color: #555; margin: 10px 0 3px; }
+    select, input[type="text"], input[type="password"] {
+      width: 100%; padding: 6px 8px;
+      border: 1px solid #ccc; border-radius: 3px; font-size: 13px;
+    }
+    select:focus, input:focus { outline: none; border-color: #1a73e8; }
+
+    .status { font-size: 11px; min-height: 16px; margin-top: 6px; color: #555; }
+    .status.error   { color: #d93025; }
+    .status.success { color: #0f9d58; }
+    .hint { font-size: 11px; color: #888; margin-top: 3px; }
+
+    .help-wrap { position: relative; display: inline-block; }
+    .help-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #9aa0a6; color: #fff;
+      font-size: 9px; font-weight: bold;
+      cursor: default; margin-left: 4px; vertical-align: middle;
+    }
+    .help-tip {
+      display: none; position: absolute; left: 0; top: calc(100% + 4px);
+      background: #3c4043; color: #e8eaed;
+      padding: 7px 9px; border-radius: 4px;
+      font-size: 11px; font-weight: normal; white-space: nowrap;
+      z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      /* invisible bridge so mouse can reach the tooltip without it disappearing */
+    }
+    .help-tip::before {
+      content: ''; position: absolute; top: -8px; left: 0; right: 0; height: 8px;
+    }
+    .help-tip a { color: #8ab4f8; }
+    .help-wrap:hover .help-tip { display: block; }
+
+    .range-row { display: flex; gap: 14px; margin-top: 10px; }
+    .range-label { font-size: 12px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+    details { margin-top: 14px; }
+    summary {
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      user-select: none; list-style: none; color: #555;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: '▶  '; font-size: 10px; }
+    details[open] summary::before { content: '▼  '; }
+    .details-body { margin-top: 10px; }
+
+    #logBox {
+      margin-top: 8px; height: 180px; overflow-y: auto;
+      background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 3px;
+      padding: 8px; font-family: monospace; font-size: 11px;
+      color: #555; white-space: pre-wrap; word-break: break-all;
+    }
+
+    hr { border: none; border-top: 1px solid #e8eaed; margin: 14px 0; }
+  </style>
+</head>
+<body>
+
+  <button id="btnToEnglish" class="btn btn-primary" onclick="translateToEnglish()">
+    Translate to English
+  </button>
+
+  <div class="row">
+    <select id="targetLang">
+      <option value="en">English</option>
+      <option value="ja">Japanese</option>
+      <option value="ko">Korean</option>
+      <option value="zh-TW">Chinese (Traditional)</option>
+      <option value="zh-CN">Chinese (Simplified)</option>
+      <option value="fr">French</option>
+    </select>
+    <button id="btnTranslate" class="btn btn-secondary" onclick="runTranslation()">Translate</button>
+  </div>
+
+  <div class="range-row">
+    <label class="range-label">
+      <input type="radio" name="range" value="current" checked> Current slide
+    </label>
+    <label class="range-label">
+      <input type="radio" name="range" value="all"> Entire presentation
+    </label>
+  </div>
+
+  <div id="translateStatus" class="status"></div>
+
+  <details id="logDetails">
+    <summary>Log</summary>
+    <div id="logBox"></div>
+  </details>
+
+  <hr>
+
+  <details>
+    <summary>Settings</summary>
+    <div class="details-body">
+      <label>
+        Gemini API Key
+        <span class="help-wrap">
+          <span class="help-icon">?</span>
+          <span class="help-tip">
+            Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+          </span>
+        </span>
+      </label>
+      <input type="password" id="apiKey" placeholder="Leave blank to keep current">
+      <div id="apiKeyHint" class="hint"></div>
+
+      <label>Glossary File ID</label>
+      <input type="text" id="glossaryId" placeholder="Google Drive file ID (optional)">
+
+      <label>Translation Model</label>
+      <select id="model">
+        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite — default (15 RPM / 500 RPD)</option>
+        <option value="gemini-2.5-flash">gemini-2.5-flash — higher quality (5 RPM / 20 RPD)</option>
+        <option value="gemini-2.5-pro">gemini-2.5-pro — best quality (5 RPM / 20 RPD)</option>
+      </select>
+
+      <button class="btn btn-secondary" style="margin-top:12px" onclick="saveSettings()">
+        Save Settings
+      </button>
+      <div id="settingsStatus" class="status"></div>
+    </div>
+  </details>
+
+  <script>
+    var pollTimer = null;
+    var AUTO_START = '<?= autoStart ?>';  // 'current', 'all', or ''
+
+    google.script.run
+      .withSuccessHandler(populateSettings)
+      .withFailureHandler(function(e) {
+        setStatus('settingsStatus', 'Could not load settings: ' + e.message, 'error');
+      })
+      .getSettings();
+
+    // Resume progress display if a translation is already running
+    google.script.run
+      .withSuccessHandler(function(data) {
+        if (!data || !data.running) return;
+        setButtonsDisabled(true);
+        setStatus('translateStatus', 'Translating…', '');
+        document.getElementById('logDetails').open = true;
+        handleProgress(data);
+        startPolling();
+      })
+      .getProgress();
+
+    function populateSettings(s) {
+      document.getElementById('apiKeyHint').textContent =
+        s.apiKeySet ? 'API key is set.' : 'No API key configured.';
+      document.getElementById('glossaryId').value = s.glossaryId;
+      var sel = document.getElementById('model');
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === s.model) { sel.selectedIndex = i; break; }
+      }
+      // Auto-start translation if triggered from the menu
+      if (AUTO_START && s.apiKeySet) {
+        var rangeInput = document.querySelector('input[name="range"][value="' + AUTO_START + '"]');
+        if (rangeInput) rangeInput.checked = true;
+        startTranslation('en');
+        AUTO_START = '';
+      } else if (AUTO_START && !s.apiKeySet) {
+        document.querySelector('details:last-of-type').open = true;
+        setStatus('settingsStatus', 'Please set your Gemini API key first.', 'error');
+        AUTO_START = '';
+      }
+    }
+
+    function translateToEnglish() { startTranslation('en'); }
+    function runTranslation()     { startTranslation(document.getElementById('targetLang').value); }
+
+    function getRange() {
+      return document.querySelector('input[name="range"]:checked').value;
+    }
+
+    function startTranslation(targetLang) {
+      setButtonsDisabled(true);
+      setStatus('translateStatus', 'Translating…', '');
+      clearLog();
+      document.getElementById('logDetails').open = true;
+      startPolling();
+      google.script.run
+        .withSuccessHandler(onTranslationDone)
+        .withFailureHandler(onTranslationError)
+        .translatePresentation('auto', targetLang, getRange());
+    }
+
+    function onTranslationDone() {
+      setButtonsDisabled(false);
+      setStatus('translateStatus', '', '');
+      setTimeout(function() {
+        google.script.run.withSuccessHandler(handleProgress).getProgress();
+      }, 500);
+    }
+
+    function onTranslationError(e) {
+      stopPolling();
+      setButtonsDisabled(false);
+      setStatus('translateStatus', 'Error: ' + e.message, 'error');
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(function() {
+        google.script.run.withSuccessHandler(handleProgress).getProgress();
+      }, 2000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+
+    function handleProgress(data) {
+      if (!data) return;
+      var logBox = document.getElementById('logBox');
+      logBox.textContent = data.messages.join('\n');
+      logBox.scrollTop = logBox.scrollHeight;
+      if (!data.running) stopPolling();
+    }
+
+    function clearLog() {
+      document.getElementById('logBox').textContent = '';
+    }
+
+    function saveSettings() {
+      var apiKey     = document.getElementById('apiKey').value.trim();
+      var glossaryId = document.getElementById('glossaryId').value.trim();
+      var model      = document.getElementById('model').value;
+      google.script.run
+        .withSuccessHandler(function(msg) {
+          setStatus('settingsStatus', msg, 'success');
+          document.getElementById('apiKey').value = '';
+          google.script.run.withSuccessHandler(populateSettings).getSettings();
+        })
+        .withFailureHandler(function(e) {
+          setStatus('settingsStatus', 'Save failed: ' + e.message, 'error');
+        })
+        .saveSettings(apiKey, glossaryId, model);
+    }
+
+    function setButtonsDisabled(disabled) {
+      document.getElementById('btnToEnglish').disabled = disabled;
+      document.getElementById('btnTranslate').disabled = disabled;
+    }
+
+    function setStatus(id, msg, type) {
+      var el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = 'status' + (type ? ' ' + type : '');
+    }
+  </script>
+</body>
+</html>
